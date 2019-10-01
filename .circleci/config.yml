@@ -1,0 +1,45 @@
+version: 2.1
+
+executors:
+  default:
+    docker:
+      - image: circleci/node:12-buster
+        environment:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+      - image: localstack/localstack:latest
+
+commands:
+  run_node:
+    steps:
+      - restore_cache:
+          keys:
+            - node-{{ checksum "package.json" }}
+      - run: npm install
+      - save_cache:
+          key: node-{{ checksum "package.json" }}
+          paths:
+            - ./node_modules
+      - run:
+          name: wait localstack
+          command: |
+            # Waiting for localstack server wakeup
+            timeout 20 sh -c 'until curl -sS localhost:8080/health | jq -r ".status" | grep -sq OK ; do sleep 4; done'
+
+            # Additional wait time
+            # TODO) It's not smart way...
+            sleep 20
+      - run: node index.js
+
+jobs:
+  build:
+    executor: default
+    steps:
+      - checkout
+      - run_node
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build
